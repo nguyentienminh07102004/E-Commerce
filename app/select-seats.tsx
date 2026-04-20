@@ -1,69 +1,54 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Image } from "expo-image";
 import { router } from "expo-router";
 import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const dates = ["Sun 12", "Mon 13", "Tue 14", "Wed 15", "Thu 16"];
-const times = ["10:30", "12:40", "15:50", "18:20", "21:10"];
+const times = ["10:00", "12:30", "15:20", "18:40", "20:30"];
 
-const seatRows = [
-  ["A1", "A2", "A3", "", "A4", "A5", "A6"],
-  ["B1", "B2", "B3", "", "B4", "B5", "B6"],
-  ["C1", "C2", "C3", "", "C4", "C5", "C6"],
-  ["D1", "D2", "D3", "", "D4", "D5", "D6"],
+const seatGrid = [
+  ["A1", "A2", "A3", "", "A4", "A5", "A6", "A7"],
+  ["B1", "B2", "B3", "", "B4", "B5", "B6", "B7"],
+  ["C1", "C2", "C3", "", "C4", "C5", "C6", "C7"],
+  ["D1", "D2", "D3", "", "D4", "D5", "D6", "D7"],
+  ["E1", "E2", "E3", "", "E4", "E5", "E6", "E7"],
 ];
 
-const selectedSeats = new Set(["B2", "B3"]);
-const reservedSeats = new Set(["A2", "C5", "D1"]);
+const selected = new Set(["C2", "C3"]);
+const booked = new Set(["A2", "B5", "D4", "E1"]);
 
-export default function TicketScreen() {
+export default function SelectSeatsScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.heroWrap}>
-          <Image
-            source={{
-              uri: "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1400&q=80",
-            }}
-            contentFit="cover"
-            style={styles.heroImage}
-          />
-          <View style={styles.heroMask}>
-            <View style={styles.heroTopRow}>
-              <TouchableOpacity
-                style={styles.circleButton}
-                activeOpacity={0.85}
-                onPress={() => router.back()}
-              >
-                <Ionicons name="chevron-back" size={18} color="#F8FAFC" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.circleButton}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="heart-outline" size={17} color="#F8FAFC" />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.movieTitle}>Dune: Part Two</Text>
-            <Text style={styles.movieMeta}>Sci-Fi • Adventure • 2h 46m</Text>
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            activeOpacity={0.85}
+            onPress={() => router.back()}
+          >
+            <Ionicons name="chevron-back" size={20} color="#F8FAFC" />
+          </TouchableOpacity>
+          <View style={styles.headerTitleWrap}>
+            <Text style={styles.title}>Select Seats</Text>
+            <Text style={styles.subtitle}>Dune: Part Two</Text>
           </View>
+          <TouchableOpacity style={styles.iconBtn} activeOpacity={0.85}>
+            <Ionicons name="funnel-outline" size={18} color="#F8FAFC" />
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.card}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Select Date</Text>
-            <Text style={styles.sectionAction}>March 2026</Text>
-          </View>
+        <View style={styles.selectionCard}>
+          <Text style={styles.sectionTitle}>Date</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -72,11 +57,11 @@ export default function TicketScreen() {
             {dates.map((date, idx) => (
               <TouchableOpacity
                 key={date}
-                style={[styles.slotChip, idx === 2 && styles.slotChipActive]}
-                activeOpacity={0.85}
+                style={[styles.chip, idx === 2 && styles.chipActive]}
+                activeOpacity={0.88}
               >
                 <Text
-                  style={[styles.slotText, idx === 2 && styles.slotTextActive]}
+                  style={[styles.chipText, idx === 2 && styles.chipTextActive]}
                 >
                   {date}
                 </Text>
@@ -84,9 +69,7 @@ export default function TicketScreen() {
             ))}
           </ScrollView>
 
-          <View style={styles.sectionHeaderTimes}>
-            <Text style={styles.sectionTitle}>Showtime</Text>
-          </View>
+          <Text style={[styles.sectionTitle, styles.timeTitle]}>Showtime</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -95,35 +78,40 @@ export default function TicketScreen() {
             {times.map((time, idx) => (
               <TouchableOpacity
                 key={time}
-                style={[styles.slotChip, idx === 2 && styles.slotChipActive]}
-                activeOpacity={0.85}
+                style={[styles.chip, idx === 3 && styles.chipActive]}
+                activeOpacity={0.88}
               >
                 <Text
-                  style={[styles.slotText, idx === 2 && styles.slotTextActive]}
+                  style={[styles.chipText, idx === 3 && styles.chipTextActive]}
                 >
                   {time}
                 </Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
+        </View>
 
+        <View style={styles.seatCard}>
           <View style={styles.screenWrap}>
             <View style={styles.screenArc} />
-            <Text style={styles.screenText}>SCREEN</Text>
+            <Text style={styles.screenLabel}>SCREEN</Text>
           </View>
 
-          <View style={styles.seatMatrix}>
-            {seatRows.map((row) => (
-              <View key={row.join("-")} style={styles.seatRow}>
-                {row.map((seat) => {
+          <View style={styles.gridWrap}>
+            {seatGrid.map((row, rowIndex) => (
+              <View key={`row-${rowIndex}`} style={styles.seatRow}>
+                {row.map((seat, seatIndex) => {
                   if (!seat) {
                     return (
-                      <View key={`${row[0]}-aisle`} style={styles.aisle} />
+                      <View
+                        key={`aisle-${rowIndex}-${seatIndex}`}
+                        style={styles.aisle}
+                      />
                     );
                   }
 
-                  const isSelected = selectedSeats.has(seat);
-                  const isReserved = reservedSeats.has(seat);
+                  const isSelected = selected.has(seat);
+                  const isBooked = booked.has(seat);
 
                   return (
                     <TouchableOpacity
@@ -131,15 +119,15 @@ export default function TicketScreen() {
                       style={[
                         styles.seat,
                         isSelected && styles.seatSelected,
-                        isReserved && styles.seatReserved,
+                        isBooked && styles.seatBooked,
                       ]}
-                      activeOpacity={0.85}
+                      activeOpacity={0.88}
                     >
                       <Text
                         style={[
                           styles.seatText,
                           isSelected && styles.seatTextSelected,
-                          isReserved && styles.seatTextReserved,
+                          isBooked && styles.seatTextBooked,
                         ]}
                       >
                         {seat}
@@ -161,26 +149,26 @@ export default function TicketScreen() {
               <Text style={styles.legendText}>Selected</Text>
             </View>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, styles.legendReserved]} />
-              <Text style={styles.legendText}>Reserved</Text>
+              <View style={[styles.legendDot, styles.legendBooked]} />
+              <Text style={styles.legendText}>Booked</Text>
             </View>
           </View>
         </View>
-
-        <View style={styles.checkoutBar}>
-          <View>
-            <Text style={styles.priceLabel}>Total Price</Text>
-            <Text style={styles.priceValue}>$24.00</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.checkoutButton}
-            activeOpacity={0.88}
-            onPress={() => router.push("/checkout")}
-          >
-            <Text style={styles.checkoutText}>Confirm Seats</Text>
-          </TouchableOpacity>
-        </View>
       </ScrollView>
+
+      <View style={styles.bottomBar}>
+        <View>
+          <Text style={styles.bottomLabel}>2 seats selected</Text>
+          <Text style={styles.bottomPrice}>$24.00</Text>
+        </View>
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          activeOpacity={0.88}
+          onPress={() => router.push("/checkout")}
+        >
+          <Text style={styles.primaryBtnText}>Continue</Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
@@ -192,128 +180,111 @@ const styles = StyleSheet.create({
   },
   container: {
     paddingHorizontal: 18,
-    paddingBottom: 30,
-    gap: 16,
+    paddingTop: 8,
+    paddingBottom: 120,
+    gap: 14,
   },
-  heroWrap: {
-    height: 240,
-    borderRadius: 24,
-    overflow: "hidden",
-    marginTop: 6,
-  },
-  heroImage: {
-    width: "100%",
-    height: "100%",
-  },
-  heroMask: {
-    ...StyleSheet.absoluteFillObject,
-    padding: 16,
-    justifyContent: "space-between",
-    backgroundColor: "rgba(9, 11, 19, 0.32)",
-  },
-  heroTopRow: {
+  headerRow: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
   },
-  circleButton: {
+  iconBtn: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(2, 6, 23, 0.58)",
-    borderWidth: 1,
-    borderColor: "rgba(203, 213, 225, 0.3)",
-  },
-  movieTitle: {
-    color: "#F8FAFC",
-    fontSize: 28,
-    fontWeight: "800",
-    letterSpacing: 0.2,
-  },
-  movieMeta: {
-    color: "#E2E8F0",
-    fontSize: 13,
-    marginTop: -8,
-  },
-  card: {
     backgroundColor: "#111827",
-    borderRadius: 20,
-    padding: 16,
     borderWidth: 1,
     borderColor: "#1F2937",
-  },
-  sectionHeader: {
-    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
+    justifyContent: "center",
   },
-  sectionHeaderTimes: {
-    marginTop: 16,
-    marginBottom: 12,
+  headerTitleWrap: {
+    alignItems: "center",
+  },
+  title: {
+    color: "#F8FAFC",
+    fontSize: 20,
+    fontWeight: "700",
+  },
+  subtitle: {
+    color: "#94A3B8",
+    fontSize: 12,
+    marginTop: 2,
+  },
+  selectionCard: {
+    backgroundColor: "#111827",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#1F2937",
+    padding: 14,
   },
   sectionTitle: {
     color: "#F8FAFC",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "700",
+    marginBottom: 10,
   },
-  sectionAction: {
-    color: "#F97316",
-    fontSize: 12,
-    fontWeight: "600",
+  timeTitle: {
+    marginTop: 14,
   },
   rowGap: {
     gap: 10,
   },
-  slotChip: {
+  chip: {
     paddingHorizontal: 13,
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: 11,
     backgroundColor: "#1E293B",
   },
-  slotChipActive: {
+  chipActive: {
     backgroundColor: "#F97316",
   },
-  slotText: {
+  chipText: {
     color: "#CBD5E1",
     fontSize: 12,
     fontWeight: "600",
   },
-  slotTextActive: {
+  chipTextActive: {
     color: "#FFF7ED",
   },
+  seatCard: {
+    backgroundColor: "#111827",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#1F2937",
+    padding: 14,
+  },
   screenWrap: {
-    marginTop: 22,
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 14,
   },
   screenArc: {
     width: "88%",
-    height: 24,
+    height: 28,
     borderTopLeftRadius: 200,
     borderTopRightRadius: 200,
     borderWidth: 2,
     borderBottomWidth: 0,
     borderColor: "#334155",
   },
-  screenText: {
+  screenLabel: {
     marginTop: 4,
-    color: "#64748B",
     fontSize: 11,
     letterSpacing: 2,
+    color: "#64748B",
   },
-  seatMatrix: {
-    gap: 10,
+  gridWrap: {
+    gap: 9,
   },
   seatRow: {
     flexDirection: "row",
     justifyContent: "center",
-    gap: 8,
+    gap: 7,
   },
   seat: {
-    width: 38,
-    height: 28,
+    width: 34,
+    height: 26,
     borderRadius: 8,
     backgroundColor: "#1E293B",
     borderWidth: 1,
@@ -325,28 +296,28 @@ const styles = StyleSheet.create({
     backgroundColor: "#F97316",
     borderColor: "#FB923C",
   },
-  seatReserved: {
+  seatBooked: {
     backgroundColor: "#334155",
     borderColor: "#475569",
   },
   seatText: {
     color: "#CBD5E1",
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: "700",
   },
   seatTextSelected: {
     color: "#FFF7ED",
   },
-  seatTextReserved: {
+  seatTextBooked: {
     color: "#94A3B8",
   },
   aisle: {
-    width: 16,
+    width: 12,
   },
   legendRow: {
+    marginTop: 14,
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 16,
   },
   legendItem: {
     flexDirection: "row",
@@ -366,7 +337,7 @@ const styles = StyleSheet.create({
   legendSelected: {
     backgroundColor: "#F97316",
   },
-  legendReserved: {
+  legendBooked: {
     backgroundColor: "#475569",
   },
   legendText: {
@@ -374,35 +345,38 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
   },
-  checkoutBar: {
+  bottomBar: {
+    position: "absolute",
+    left: 12,
+    right: 12,
+    bottom: 10,
     backgroundColor: "#111827",
-    borderRadius: 18,
     borderWidth: 1,
     borderColor: "#1F2937",
+    borderRadius: 18,
     paddingHorizontal: 16,
     paddingVertical: 14,
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 2,
+    justifyContent: "space-between",
   },
-  priceLabel: {
+  bottomLabel: {
     color: "#94A3B8",
     fontSize: 12,
   },
-  priceValue: {
+  bottomPrice: {
     color: "#F8FAFC",
     fontSize: 24,
     fontWeight: "800",
   },
-  checkoutButton: {
+  primaryBtn: {
     backgroundColor: "#F97316",
     borderRadius: 12,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingVertical: 12,
   },
-  checkoutText: {
-    color: "#FFFBEB",
+  primaryBtnText: {
+    color: "#FFF7ED",
     fontSize: 13,
     fontWeight: "700",
   },
