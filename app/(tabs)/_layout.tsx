@@ -17,6 +17,9 @@ export default function TabLayout() {
           borderTopColor: "#172033",
           height: 64,
           paddingTop: 8,
+          paddingHorizontal: 16,
+          justifyContent: "space-between",
+          alignItems: "center",
         },
         tabBarLabelStyle: {
           fontSize: 12,
@@ -30,15 +33,6 @@ export default function TabLayout() {
           title: "Home",
           tabBarIcon: ({ color }) => (
             <Ionicons size={22} name="home" color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="explore"
-        options={{
-          title: "Tickets",
-          tabBarIcon: ({ color }) => (
-            <Ionicons size={22} name="ticket-outline" color={color} />
           ),
         }}
       />

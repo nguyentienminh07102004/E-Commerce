@@ -1,18 +1,25 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { router } from "expo-router";
+import { useEffect, useState } from "react";
 import {
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  getMovies,
+  getShowtimes,
+  MovieResponse,
+  ShowtimeResponse,
+} from "../../lib/booking-api";
 
 const genres = ["Action", "Adventure", "Sci-Fi", "Drama"];
 
-const nowShowing = [
+const fallbackMovies = [
   {
     title: "Dune: Part Two",
     image:
@@ -36,9 +43,92 @@ const nowShowing = [
   },
 ];
 
-const schedules = ["10:00", "12:30", "15:20", "18:40", "20:30"];
+const fallbackSchedules = ["10:00", "12:30", "15:20", "18:40", "20:30"];
+
+function toDurationLabel(duration: number) {
+  const hours = Math.floor(duration / 60);
+  const minutes = duration % 60;
+
+  return `${hours}h ${minutes.toString().padStart(2, "0")}m`;
+}
+
+function toTimeLabel(startTime: string) {
+  return startTime.length >= 16 ? startTime.slice(11, 16) : startTime;
+}
 
 export default function HomeScreen() {
+  const [movies, setMovies] = useState<MovieResponse[]>([]);
+  const [showtimes, setShowtimes] = useState<ShowtimeResponse[]>([]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadData = async () => {
+      try {
+        const [moviePage, showtimePage] = await Promise.all([
+          getMovies(),
+          getShowtimes(),
+        ]);
+
+        if (!active) {
+          return;
+        }
+
+        setMovies(moviePage.content ?? []);
+        setShowtimes(showtimePage.content ?? []);
+      } catch {
+        if (!active) {
+          return;
+        }
+
+        setMovies([]);
+        setShowtimes([]);
+      }
+    };
+
+    loadData();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const movieCards =
+    movies.length > 0
+      ? movies.slice(0, 3).map((movie, index) => {
+          const fallback = fallbackMovies[index % fallbackMovies.length];
+
+          return {
+            title: movie.title,
+            image: fallback.image,
+            rating: movie.status === "NOW_SHOWING" ? "Now" : "Soon",
+            duration: toDurationLabel(movie.duration),
+            movieId: movie.id,
+            description: movie.description,
+          };
+        })
+      : fallbackMovies.map((movie) => ({
+          ...movie,
+          movieId: 0,
+          description: "",
+        }));
+
+  const scheduleItems =
+    showtimes.length > 0
+      ? showtimes.slice(0, 5).map((showtime) => toTimeLabel(showtime.startTime))
+      : fallbackSchedules;
+
+  const featuredMovie = movieCards[0] ?? {
+    title: "Interstellar Reborn",
+    image: fallbackMovies[0].image,
+    rating: "Now",
+    duration: "2h 46m",
+    movieId: 0,
+    description: "",
+  };
+
+  const featuredShowtime = showtimes[0];
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
@@ -65,19 +155,46 @@ export default function HomeScreen() {
         <View style={styles.heroCard}>
           <Image
             source={{
-              uri: "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=1200&q=80",
+              uri: featuredMovie.image,
             }}
             contentFit="cover"
             style={styles.heroImage}
           />
           <View style={styles.heroOverlay}>
             <Text style={styles.badge}>Premiere</Text>
-            <Text style={styles.heroTitle}>Interstellar Reborn</Text>
-            <Text style={styles.heroSubtitle}>IMAX 3D • 9.1 Rating</Text>
+            <Text style={styles.heroTitle}>{featuredMovie.title}</Text>
+            <Text style={styles.heroSubtitle}>
+              {featuredMovie.duration} • {featuredMovie.rating}
+            </Text>
             <TouchableOpacity
               style={styles.primaryButton}
               activeOpacity={0.85}
-              onPress={() => router.push("/details")}
+              onPress={() =>
+                router.push({
+                  pathname: "/details",
+                  params: {
+                    movieId: String(featuredMovie.movieId),
+                    movieTitle: featuredMovie.title,
+                    movieMeta: `${featuredMovie.duration} • ${featuredMovie.rating}`,
+                    movieImage: featuredMovie.image,
+                    showtimeId: featuredShowtime
+                      ? String(featuredShowtime.id)
+                      : "30",
+                    roomId: featuredShowtime
+                      ? String(featuredShowtime.roomId)
+                      : "10",
+                    showtimeDate: featuredShowtime
+                      ? featuredShowtime.startTime.slice(0, 10)
+                      : "2026-05-24",
+                    showtimeTime: featuredShowtime
+                      ? toTimeLabel(featuredShowtime.startTime)
+                      : "18:40",
+                    ticketPrice: featuredShowtime
+                      ? String(featuredShowtime.basePrice)
+                      : "12000",
+                  },
+                })
+              }
             >
               <Text style={styles.primaryButtonText}>Book Ticket</Text>
             </TouchableOpacity>
@@ -117,12 +234,37 @@ export default function HomeScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.posterRow}
         >
-          {nowShowing.map((movie) => (
+          {movieCards.map((movie) => (
             <TouchableOpacity
               key={movie.title}
               style={styles.posterCard}
               activeOpacity={0.88}
-              onPress={() => router.push("/details")}
+              onPress={() =>
+                router.push({
+                  pathname: "/details",
+                  params: {
+                    movieId: String(movie.movieId),
+                    movieTitle: movie.title,
+                    movieMeta: `${movie.duration} • ${movie.rating}`,
+                    movieImage: movie.image,
+                    showtimeId: featuredShowtime
+                      ? String(featuredShowtime.id)
+                      : "30",
+                    roomId: featuredShowtime
+                      ? String(featuredShowtime.roomId)
+                      : "10",
+                    showtimeDate: featuredShowtime
+                      ? featuredShowtime.startTime.slice(0, 10)
+                      : "2026-05-24",
+                    showtimeTime: featuredShowtime
+                      ? toTimeLabel(featuredShowtime.startTime)
+                      : "18:40",
+                    ticketPrice: featuredShowtime
+                      ? String(featuredShowtime.basePrice)
+                      : "12000",
+                  },
+                })
+              }
             >
               <Image
                 source={{ uri: movie.image }}
@@ -147,7 +289,7 @@ export default function HomeScreen() {
           <Text style={styles.sectionLink}>Cinema 1</Text>
         </View>
         <View style={styles.scheduleWrap}>
-          {schedules.map((time, idx) => (
+          {scheduleItems.map((time, idx) => (
             <TouchableOpacity
               key={time}
               style={[styles.timeChip, idx === 2 && styles.timeChipActive]}

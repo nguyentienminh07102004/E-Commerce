@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import {
     ScrollView,
     StyleSheet,
@@ -9,6 +9,14 @@ import {
     View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+function readParam(value: string | string[] | undefined, fallback: string) {
+  if (Array.isArray(value)) {
+    return value[0] ?? fallback;
+  }
+
+  return value ?? fallback;
+}
 
 const cast = [
   {
@@ -34,6 +42,35 @@ const cast = [
 const chips = ["Sci-Fi", "Adventure", "IMAX 3D", "PG-13"];
 
 export default function DetailsScreen() {
+  const params = useLocalSearchParams<{
+    movieId?: string | string[];
+    movieTitle?: string | string[];
+    movieMeta?: string | string[];
+    movieImage?: string | string[];
+    showtimeId?: string | string[];
+    roomId?: string | string[];
+    showtimeDate?: string | string[];
+    showtimeTime?: string | string[];
+    ticketPrice?: string | string[];
+    userId?: string | string[];
+  }>();
+
+  const movieTitle = readParam(params.movieTitle, "Dune: Part Two");
+  const movieMeta = readParam(
+    params.movieMeta,
+    "166 min • 2026 • Denis Villeneuve",
+  );
+  const movieImage = readParam(
+    params.movieImage,
+    "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=1500&q=80",
+  );
+  const showtimeId = readParam(params.showtimeId, "30");
+  const roomId = readParam(params.roomId, "10");
+  const showtimeDate = readParam(params.showtimeDate, "2026-05-24");
+  const showtimeTime = readParam(params.showtimeTime, "18:40");
+  const ticketPrice = readParam(params.ticketPrice, "12000");
+  const userId = readParam(params.userId, "usr_001");
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
@@ -43,7 +80,7 @@ export default function DetailsScreen() {
         <View style={styles.hero}>
           <Image
             source={{
-              uri: "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=1500&q=80",
+              uri: movieImage,
             }}
             contentFit="cover"
             style={styles.heroImage}
@@ -68,8 +105,8 @@ export default function DetailsScreen() {
               <Text style={styles.scoreText}>8.7</Text>
             </View>
 
-            <Text style={styles.title}>Dune: Part Two</Text>
-            <Text style={styles.meta}>166 min • 2026 • Denis Villeneuve</Text>
+            <Text style={styles.title}>{movieTitle}</Text>
+            <Text style={styles.meta}>{movieMeta}</Text>
           </View>
         </View>
 
@@ -144,7 +181,21 @@ export default function DetailsScreen() {
         <TouchableOpacity
           style={styles.buyButton}
           activeOpacity={0.88}
-          onPress={() => router.push("/select-seats")}
+          onPress={() =>
+            router.push({
+              pathname: "/select-seats",
+              params: {
+                movieTitle,
+                cinemaName: "Cinema 1",
+                showtimeId,
+                roomId,
+                showtimeDate,
+                showtimeTime,
+                ticketPrice,
+                userId,
+              },
+            })
+          }
         >
           <Text style={styles.buyText}>Choose Seats</Text>
         </TouchableOpacity>

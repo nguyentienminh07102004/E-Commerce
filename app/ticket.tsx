@@ -1,15 +1,45 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+function readParam(value: string | string[] | undefined, fallback: string) {
+  if (Array.isArray(value)) {
+    return value[0] ?? fallback;
+  }
+
+  return value ?? fallback;
+}
+
 export default function TicketScreen() {
+  const params = useLocalSearchParams<{
+    bookingId?: string | string[];
+    qrCode?: string | string[];
+    paymentMethod?: string | string[];
+    movieTitle?: string | string[];
+    cinemaName?: string | string[];
+    showtimeDate?: string | string[];
+    showtimeTime?: string | string[];
+    selectedSeats?: string | string[];
+    finalAmount?: string | string[];
+  }>();
+
+  const bookingId = readParam(params.bookingId, "MV-2481-9337");
+  const qrCode = readParam(params.qrCode, "QR-123");
+  const paymentMethod = readParam(params.paymentMethod, "MOMO");
+  const movieTitle = readParam(params.movieTitle, "Dune: Part Two");
+  const cinemaName = readParam(params.cinemaName, "Cinema 1");
+  const showtimeDate = readParam(params.showtimeDate, "Tue, 14 Mar");
+  const showtimeTime = readParam(params.showtimeTime, "18:40");
+  const selectedSeats = readParam(params.selectedSeats, "C2, C3");
+  const finalAmount = readParam(params.finalAmount, "$26.00");
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
@@ -34,37 +64,49 @@ export default function TicketScreen() {
           <View style={styles.successIconWrap}>
             <Ionicons name="checkmark" size={24} color="#FFF7ED" />
           </View>
-          <Text style={styles.successTitle}>Payment Successful</Text>
+          <Text style={styles.successTitle}>Booking Successful</Text>
           <Text style={styles.successSub}>
-            Your booking is confirmed. Enjoy the movie night.
+            Your booking is confirmed via {paymentMethod}. Enjoy the movie
+            night.
           </Text>
         </View>
 
         <View style={styles.ticketCard}>
           <View style={styles.topSection}>
-            <Text style={styles.movieTitle}>Dune: Part Two</Text>
-            <Text style={styles.movieMeta}>Sci-Fi • Adventure • 2h 46m</Text>
+            <Text style={styles.movieTitle}>{movieTitle}</Text>
+            <Text style={styles.movieMeta}>{cinemaName}</Text>
           </View>
 
           <View style={styles.rowWrap}>
             <View style={styles.infoBlock}>
               <Text style={styles.label}>Date</Text>
-              <Text style={styles.value}>Tue, 14 Mar</Text>
+              <Text style={styles.value}>{showtimeDate}</Text>
             </View>
             <View style={styles.infoBlock}>
               <Text style={styles.label}>Time</Text>
-              <Text style={styles.value}>18:40</Text>
+              <Text style={styles.value}>{showtimeTime}</Text>
             </View>
           </View>
 
           <View style={styles.rowWrap}>
             <View style={styles.infoBlock}>
               <Text style={styles.label}>Cinema</Text>
-              <Text style={styles.value}>Cinema 1</Text>
+              <Text style={styles.value}>{cinemaName}</Text>
             </View>
             <View style={styles.infoBlock}>
               <Text style={styles.label}>Seats</Text>
-              <Text style={styles.value}>C2, C3</Text>
+              <Text style={styles.value}>{selectedSeats}</Text>
+            </View>
+          </View>
+
+          <View style={styles.rowWrap}>
+            <View style={styles.infoBlock}>
+              <Text style={styles.label}>Amount</Text>
+              <Text style={styles.value}>{finalAmount}</Text>
+            </View>
+            <View style={styles.infoBlock}>
+              <Text style={styles.label}>Booking Method</Text>
+              <Text style={styles.value}>{paymentMethod}</Text>
             </View>
           </View>
 
@@ -87,7 +129,8 @@ export default function TicketScreen() {
                 />
               ))}
             </View>
-            <Text style={styles.bookingCode}>BOOKING ID: MV-2481-9337</Text>
+            <Text style={styles.bookingCode}>BOOKING ID: {bookingId}</Text>
+            <Text style={styles.bookingCode}>QR: {qrCode}</Text>
           </View>
         </View>
 

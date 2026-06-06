@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
+import { useState } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -8,29 +9,192 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuth } from "../lib/auth";
+import {
+  createBooking,
+  createBookingDetail,
+  createPayment,
+  formatMoney,
+  seatLabelToSeatId,
+} from "../lib/booking-api";
 
 const paymentMethods = [
   {
-    id: "visa",
-    label: "Visa",
-    detail: "**** 4819",
-    icon: "card-outline",
-  },
-  {
-    id: "momo",
+    id: "MOMO",
     label: "MoMo Wallet",
     detail: "Connected",
     icon: "wallet-outline",
   },
   {
-    id: "apple",
-    label: "Apple Pay",
-    detail: "Tap to pay",
-    icon: "logo-apple",
+    id: "VNPAY",
+    label: "VNPAY",
+    detail: "Fast checkout",
+    icon: "card-outline",
+  },
+  {
+    id: "CASH",
+    label: "Cash",
+    detail: "Pay at counter",
+    icon: "cash-outline",
   },
 ] as const;
 
+function readParam(value: string | string[] | undefined, fallback: string) {
+  if (Array.isArray(value)) {
+    return value[0] ?? fallback;
+  }
+
+  return value ?? fallback;
+}
+
 export default function CheckoutScreen() {
+  const params = useLocalSearchParams<{
+    movieTitle?: string | string[];
+    cinemaName?: string | string[];
+    showtimeId?: string | string[];
+    roomId?: string | string[];
+    showtimeDate?: string | string[];
+    showtimeTime?: string | string[];
+    userId?: string | string[];
+    selectedSeatIds?: string | string[];
+    selectedSeats?: string | string[];
+    selectedSeatPrices?: string | string[];
+    totalAmount?: string | string[];
+    discountAmount?: string | string[];
+    serviceFee?: string | string[];
+  }>();
+
+  const movieTitle = readParam(params.movieTitle, "Dune: Part Two");
+  const cinemaName = readParam(params.cinemaName, "Cinema 1");
+  const showtimeId = Number(readParam(params.showtimeId, "30"));
+  const roomId = readParam(params.roomId, "10");
+  const showtimeDate = readParam(params.showtimeDate, "Tue, 14 Mar");
+  const showtimeTime = readParam(params.showtimeTime, "18:40");
+  const userId = readParam(params.userId, "usr_001");
+  const selectedSeatIds = readParam(params.selectedSeatIds, "")
+    .split(",")
+    .filter(Boolean)
+    .map((seatId) => Number(seatId));
+  const selectedSeats = readParam(params.selectedSeats, "C2,C3")
+    .split(",")
+    .filter(Boolean);
+  const selectedSeatPrices = readParam(params.selectedSeatPrices, "")
+    .split(",")
+    .filter(Boolean)
+    .map((price) => Number(price));
+  const discountAmount = Number(readParam(params.discountAmount, "0"));
+  const serviceFee = Number(readParam(params.serviceFee, "0"));
+  const ticketPrice = selectedSeatPrices[0] ?? 12000;
+  const derivedTotalAmount =
+    selectedSeatPrices.length > 0
+      ? selectedSeatPrices.reduce((sum, price) => sum + price, 0) + serviceFee
+      : selectedSeats.length * 12000 + serviceFee;
+  const totalAmount = Number(
+    readParam(params.totalAmount, String(derivedTotalAmount)),
+  );
+  const finalAmount = Math.max(totalAmount - discountAmount, 0);
+  const { isAuthenticated, isReady } = useAuth();
+
+  const [selectedMethodId, setSelectedMethodId] =
+    useState<(typeof paymentMethods)[number]["id"]>("MOMO");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const selectedMethod =
+    paymentMethods.find((method) => method.id === selectedMethodId) ??
+    paymentMethods[0];
+
+  const buildCheckoutReturnPath = () => {
+    const paramsMap = new URLSearchParams({
+      movieTitle,
+      cinemaName,
+      showtimeId: String(showtimeId),
+      roomId,
+      showtimeDate,
+      showtimeTime,
+      userId,
+      selectedSeatIds: selectedSeatIds.join(","),
+      selectedSeats: selectedSeats.join(","),
+      selectedSeatPrices: selectedSeatPrices.join(","),
+      totalAmount: String(totalAmount),
+      discountAmount: String(discountAmount),
+      serviceFee: String(serviceFee),
+    });
+
+    return `/checkout?${paramsMap.toString()}`;
+  };
+
+  const handlePayNow = async () => {
+    if (isSubmitting) {
+      return;
+    }
+
+    if (!isAuthenticated) {
+      router.push({
+        pathname: "/login",
+        params: { returnTo: buildCheckoutReturnPath() },
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMessage(null);
+
+    try {
+      const booking = await createBooking({
+        userId,
+        showtimeId,
+        promotionId: null,
+        totalAmount,
+        discountAmount,
+        finalAmount,
+        status: "PENDING",
+        qrCode: `BK-${showtimeId}-${Date.now().toString(36).toUpperCase()}`,
+      });
+
+      await Promise.all(
+        selectedSeats.map((seatLabel, index) =>
+          createBookingDetail({
+            bookingId: booking.id,
+            seatId: selectedSeatIds[index] ?? seatLabelToSeatId(seatLabel),
+            priceAtTime: selectedSeatPrices[index] ?? 12000,
+          }),
+        ),
+      );
+
+      const payment = await createPayment({
+        method: selectedMethod.id,
+        amount: finalAmount,
+        transactionId: `TX-${Date.now().toString(36).toUpperCase()}`,
+        status: "SUCCESS",
+        bookingId: booking.id,
+      });
+
+      router.replace({
+        pathname: "/ticket",
+        params: {
+          bookingId: String(booking.id),
+          qrCode: booking.qrCode,
+          paymentId: String(payment.id),
+          paymentMethod: payment.method,
+          movieTitle,
+          cinemaName,
+          showtimeDate,
+          showtimeTime,
+          selectedSeats: selectedSeats.join(", "),
+          roomId,
+          finalAmount: String(finalAmount),
+        },
+      });
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Payment failed",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
@@ -52,27 +216,31 @@ export default function CheckoutScreen() {
         </View>
 
         <View style={styles.ticketCard}>
-          <Text style={styles.movieTitle}>Dune: Part Two</Text>
-          <Text style={styles.movieMeta}>Cinema 1 • Tue 14 Mar • 15:50</Text>
+          <Text style={styles.movieTitle}>{movieTitle}</Text>
+          <Text style={styles.movieMeta}>
+            {cinemaName} • {showtimeDate} • {showtimeTime}
+          </Text>
 
           <View style={styles.divider} />
 
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Seats</Text>
-            <Text style={styles.infoValue}>B2, B3</Text>
+            <Text style={styles.infoValue}>{selectedSeats.join(", ")}</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Ticket Price</Text>
-            <Text style={styles.infoValue}>$12.00 x 2</Text>
+            <Text style={styles.infoValue}>
+              {formatMoney(ticketPrice)} x {selectedSeats.length}
+            </Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Service Fee</Text>
-            <Text style={styles.infoValue}>$2.00</Text>
+            <Text style={styles.infoValue}>{formatMoney(serviceFee)}</Text>
           </View>
 
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalValue}>$26.00</Text>
+            <Text style={styles.totalValue}>{formatMoney(finalAmount)}</Text>
           </View>
         </View>
 
@@ -83,8 +251,9 @@ export default function CheckoutScreen() {
           </View>
 
           <View style={styles.methodList}>
-            {paymentMethods.map((method, idx) => {
-              const selected = idx === 0;
+            {paymentMethods.map((method) => {
+              const selected = method.id === selectedMethodId;
+
               return (
                 <TouchableOpacity
                   key={method.id}
@@ -93,6 +262,7 @@ export default function CheckoutScreen() {
                     selected && styles.methodItemSelected,
                   ]}
                   activeOpacity={0.88}
+                  onPress={() => setSelectedMethodId(method.id)}
                 >
                   <View style={styles.methodLeft}>
                     <View
@@ -142,19 +312,34 @@ export default function CheckoutScreen() {
             <Text style={styles.applyText}>Apply</Text>
           </TouchableOpacity>
         </View>
+
+        {errorMessage ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>{errorMessage}</Text>
+          </View>
+        ) : null}
       </ScrollView>
 
       <View style={styles.bottomBar}>
         <View>
           <Text style={styles.bottomLabel}>Amount to Pay</Text>
-          <Text style={styles.bottomPrice}>$26.00</Text>
+          <Text style={styles.bottomPrice}>{formatMoney(finalAmount)}</Text>
         </View>
         <TouchableOpacity
-          style={styles.payButton}
+          style={[styles.payButton, isSubmitting && styles.payButtonDisabled]}
           activeOpacity={0.88}
-          onPress={() => router.push("/ticket")}
+          onPress={handlePayNow}
+          disabled={isSubmitting}
         >
-          <Text style={styles.payText}>Pay Now</Text>
+          <Text style={styles.payText}>
+            {!isReady
+              ? "Loading..."
+              : isSubmitting
+                ? "Processing..."
+                : isAuthenticated
+                  ? "Pay Now"
+                  : "Login to Pay"}
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -406,5 +591,21 @@ const styles = StyleSheet.create({
     color: "#FFF7ED",
     fontSize: 13,
     fontWeight: "700",
+  },
+  payButtonDisabled: {
+    opacity: 0.55,
+  },
+  errorBox: {
+    backgroundColor: "rgba(248, 113, 113, 0.12)",
+    borderColor: "rgba(248, 113, 113, 0.35)",
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  errorText: {
+    color: "#FCA5A5",
+    fontSize: 12,
+    fontWeight: "600",
   },
 });

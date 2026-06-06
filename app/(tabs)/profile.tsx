@@ -1,12 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import {
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuth } from "../../lib/auth";
 
 const bookedTickets = [
   {
@@ -30,103 +32,156 @@ const bookedTickets = [
 ];
 
 export default function ProfileScreen() {
+  const { isAuthenticated, fullName, role, signOut, isReady } = useAuth();
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.headerCard}>
-          <View style={styles.avatarWrap}>
-            <Ionicons name="person" size={28} color="#FFF7ED" />
-          </View>
-          <View>
-            <Text style={styles.name}>Nguyen Movie Lover</Text>
-            <Text style={styles.email}>moviefan@email.com</Text>
-          </View>
-        </View>
-
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>12</Text>
-            <Text style={styles.statLabel}>Booked</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>4</Text>
-            <Text style={styles.statLabel}>Upcoming</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>8</Text>
-            <Text style={styles.statLabel}>Watched</Text>
-          </View>
-        </View>
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Booked Tickets</Text>
-          <Text style={styles.sectionLink}>History</Text>
-        </View>
-
-        <View style={styles.ticketList}>
-          {bookedTickets.map((ticket) => {
-            const isUpcoming = ticket.status === "Upcoming";
-            return (
-              <TouchableOpacity
-                key={ticket.id}
-                style={styles.ticketCard}
-                activeOpacity={0.9}
-              >
-                <View style={styles.ticketTop}>
-                  <Text style={styles.movieTitle}>{ticket.movie}</Text>
-                  <View
-                    style={[
-                      styles.statusPill,
-                      isUpcoming && styles.statusPillUpcoming,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.statusText,
-                        isUpcoming && styles.statusTextUpcoming,
-                      ]}
-                    >
-                      {ticket.status}
-                    </Text>
-                  </View>
-                </View>
-
-                <Text style={styles.ticketMeta}>
-                  {ticket.cinema} • {ticket.date} • {ticket.time}
+        {!isAuthenticated ? (
+          <View style={styles.authCard}>
+            <View style={styles.authHeader}>
+              <View style={styles.avatarWrap}>
+                <Ionicons name="person" size={28} color="#FFF7ED" />
+              </View>
+              <View>
+                <Text style={styles.authTitle}>Guest account</Text>
+                <Text style={styles.authText}>
+                  Login to view saved tickets and pay for bookings.
                 </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={styles.authButton}
+              activeOpacity={0.88}
+              onPress={() => router.push("/login")}
+              disabled={!isReady}
+            >
+              <Text style={styles.authButtonText}>Login</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.secondaryAuthButton}
+              activeOpacity={0.88}
+              onPress={() => router.push("/register")}
+              disabled={!isReady}
+            >
+              <Text style={styles.secondaryAuthButtonText}>Register</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            <View style={styles.headerCard}>
+              <View style={styles.avatarWrap}>
+                <Ionicons name="person" size={28} color="#FFF7ED" />
+              </View>
+              <View>
+                <Text style={styles.name}>{fullName ?? "Guest"}</Text>
+                <Text style={styles.email}>{role ?? "Member"}</Text>
+              </View>
+            </View>
 
-                <View style={styles.ticketBottom}>
-                  <View>
-                    <Text style={styles.metaLabel}>Seats</Text>
-                    <Text style={styles.metaValue}>{ticket.seats}</Text>
-                  </View>
-                  <View>
-                    <Text style={styles.metaLabel}>Booking ID</Text>
-                    <Text style={styles.metaValue}>{ticket.id}</Text>
-                  </View>
-                </View>
+            <TouchableOpacity
+              style={styles.logoutButton}
+              activeOpacity={0.88}
+              onPress={signOut}
+            >
+              <Ionicons name="log-out-outline" size={18} color="#FCA5A5" />
+              <Text style={styles.logoutText}>Logout</Text>
+            </TouchableOpacity>
+
+            <View style={styles.statsRow}>
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>12</Text>
+                <Text style={styles.statLabel}>Booked</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>4</Text>
+                <Text style={styles.statLabel}>Upcoming</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>8</Text>
+                <Text style={styles.statLabel}>Watched</Text>
+              </View>
+            </View>
+
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Booked Tickets</Text>
+              <Text style={styles.sectionLink}>History</Text>
+            </View>
+
+            <View style={styles.ticketList}>
+              {bookedTickets.map((ticket) => {
+                const isUpcoming = ticket.status === "Upcoming";
+                return (
+                  <TouchableOpacity
+                    key={ticket.id}
+                    style={styles.ticketCard}
+                    activeOpacity={0.9}
+                  >
+                    <View style={styles.ticketTop}>
+                      <Text style={styles.movieTitle}>{ticket.movie}</Text>
+                      <View
+                        style={[
+                          styles.statusPill,
+                          isUpcoming && styles.statusPillUpcoming,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.statusText,
+                            isUpcoming && styles.statusTextUpcoming,
+                          ]}
+                        >
+                          {ticket.status}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Text style={styles.ticketMeta}>
+                      {ticket.cinema} • {ticket.date} • {ticket.time}
+                    </Text>
+
+                    <View style={styles.ticketBottom}>
+                      <View>
+                        <Text style={styles.metaLabel}>Seats</Text>
+                        <Text style={styles.metaValue}>{ticket.seats}</Text>
+                      </View>
+                      <View>
+                        <Text style={styles.metaLabel}>Booking ID</Text>
+                        <Text style={styles.metaValue}>{ticket.id}</Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <View style={styles.quickActions}>
+              <TouchableOpacity style={styles.actionBtn} activeOpacity={0.88}>
+                <Ionicons
+                  name="notifications-outline"
+                  size={18}
+                  color="#E2E8F0"
+                />
+                <Text style={styles.actionText}>Notifications</Text>
               </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        <View style={styles.quickActions}>
-          <TouchableOpacity style={styles.actionBtn} activeOpacity={0.88}>
-            <Ionicons name="notifications-outline" size={18} color="#E2E8F0" />
-            <Text style={styles.actionText}>Notifications</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} activeOpacity={0.88}>
-            <Ionicons name="settings-outline" size={18} color="#E2E8F0" />
-            <Text style={styles.actionText}>Settings</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} activeOpacity={0.88}>
-            <Ionicons name="help-circle-outline" size={18} color="#E2E8F0" />
-            <Text style={styles.actionText}>Support</Text>
-          </TouchableOpacity>
-        </View>
+              <TouchableOpacity style={styles.actionBtn} activeOpacity={0.88}>
+                <Ionicons name="settings-outline" size={18} color="#E2E8F0" />
+                <Text style={styles.actionText}>Settings</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionBtn} activeOpacity={0.88}>
+                <Ionicons
+                  name="help-circle-outline"
+                  size={18}
+                  color="#E2E8F0"
+                />
+                <Text style={styles.actionText}>Support</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -170,6 +225,70 @@ const styles = StyleSheet.create({
     marginTop: 2,
     color: "#94A3B8",
     fontSize: 12,
+  },
+  authCard: {
+    backgroundColor: "#111827",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#1F2937",
+    padding: 14,
+    gap: 10,
+  },
+  authHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  authTitle: {
+    color: "#F8FAFC",
+    fontSize: 16,
+    fontWeight: "800",
+    marginBottom: 2,
+  },
+  authText: {
+    color: "#CBD5E1",
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  authButton: {
+    backgroundColor: "#F97316",
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  authButtonText: {
+    color: "#FFF7ED",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  secondaryAuthButton: {
+    backgroundColor: "#0F172A",
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#243041",
+  },
+  secondaryAuthButtonText: {
+    color: "#E2E8F0",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  logoutButton: {
+    backgroundColor: "#1A2435",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#3F1D22",
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  logoutText: {
+    color: "#FCA5A5",
+    fontSize: 13,
+    fontWeight: "800",
   },
   statsRow: {
     flexDirection: "row",
