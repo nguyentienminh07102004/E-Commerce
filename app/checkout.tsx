@@ -2,20 +2,18 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import {
-    Linking,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Linking,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
-    createBooking,
-    createBookingDetail,
-    createPayment,
-    formatMoney,
-    seatLabelToSeatId,
+  createBooking,
+  createPayment,
+  formatMoney
 } from "../lib/api";
 import { useAuth } from "../lib/auth";
 
@@ -145,23 +143,10 @@ export default function CheckoutScreen() {
       const booking = await createBooking({
         userId,
         showtimeId,
-        promotionId: null,
-        totalAmount,
-        discountAmount,
-        finalAmount,
+        seatIds: selectedSeatIds,
         status: "PENDING",
         qrCode: `BK-${showtimeId}-${Date.now().toString(36).toUpperCase()}`,
       });
-
-      await Promise.all(
-        selectedSeats.map((seatLabel, index) =>
-          createBookingDetail({
-            bookingId: booking.id,
-            seatId: selectedSeatIds[index] ?? seatLabelToSeatId(seatLabel),
-            priceAtTime: selectedSeatPrices[index] ?? 12000,
-          }),
-        ),
-      );
 
       const payment = await createPayment({
         method: selectedMethod.id,

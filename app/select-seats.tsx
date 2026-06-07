@@ -447,12 +447,12 @@ const styles = StyleSheet.create({
   showtimesGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 12,
     justifyContent: "space-between",
   },
   showtimeBox: {
     width: "48%",
     minHeight: 96,
+    marginBottom: 12,
     padding: 14,
     borderRadius: 18,
     backgroundColor: "#0F172A",

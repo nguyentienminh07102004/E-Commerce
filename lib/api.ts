@@ -1,5 +1,8 @@
 import Constants from "expo-constants";
+import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
+
+const ACCESS_TOKEN_KEY = "auth.accessToken";
 
 export type MetaData = {
   totalPage?: number;
@@ -29,11 +32,11 @@ type PageResponse<T> = {
 
 export type SeatResponse = {
   id: number;
-  seatNumber: string;
-  rowLabel: string;
+  seatNumber: number;
+  rowNumber: number;
   roomId: number;
   type: "STANDARD" | "VIP" | "COUPLE";
-  basePrice: number;
+  priceMultiplier: number;
   createdAt?: string;
   createdBy?: string | null;
   updatedAt?: string | null;
@@ -79,6 +82,14 @@ export type ShowtimeResponse = {
   updatedBy?: string | null;
 };
 
+export type TicketSoldResponse = {
+  showtimeId: number;
+  seatId: string;
+  type: string;
+  price: number;
+  isSold: boolean;
+};
+
 export type CinemaResponse = {
   id: number;
   name: string;
@@ -93,10 +104,7 @@ export type CinemaResponse = {
 export type BookingCreatePayload = {
   userId: string;
   showtimeId: number;
-  promotionId: number | null;
-  totalAmount: number;
-  discountAmount: number;
-  finalAmount: number;
+  seatIds: number[];
   status: "PENDING" | "CONFIRMED" | "CANCELLED";
   qrCode: string;
 };
@@ -259,9 +267,6 @@ function getErrorMessage(error: unknown) {
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 5000);
-
   try {
     const headers: Record<string, string> = {
       Accept: "application/json",
@@ -273,10 +278,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
       method: (init?.method as string) ?? "GET",
       headers,
       body: init?.body as any,
-      signal: controller.signal,
     });
-
-    clearTimeout(timeout);
 
     const text = await res.text();
     let payload: unknown;
@@ -298,7 +300,6 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   } catch (error) {
     throw new Error(getErrorMessage(error));
   } finally {
-    clearTimeout(timeout);
   }
 }
 
@@ -324,14 +325,35 @@ export async function getCinemas() {
   return requestJson<CinemaResponse[]>("/v1/cinemas");
 }
 
+export async function getSeatsByRoom(roomId: number) {
+  return requestJson<SeatResponse[] | PageResponse<SeatResponse>>(
+    `/v1/seats/${roomId}`,
+  );
+}
+
 export async function getSeats() {
   return requestJson<PageResponse<SeatResponse>>("/v1/seats");
 }
 
+export async function getSoldTickets(showtimeId: number) {
+  return requestJson<TicketSoldResponse[]>(
+    `/v1/tickets/sold?showtimeId=${showtimeId}`,
+  );
+}
+
+async function getAccessToken() {
+  return SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
+}
+
 export async function createBooking(payload: BookingCreatePayload) {
+  const accessToken = await getAccessToken();
+
   return requestJson<BookingResponse>("/v1/bookings", {
     method: "POST",
     body: JSON.stringify(payload),
+    headers: accessToken
+      ? { Authorization: `Bearer ${accessToken}` }
+      : undefined,
   });
 }
 

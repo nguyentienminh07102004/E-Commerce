@@ -2,14 +2,19 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { formatMoney, getSeats, SeatResponse } from "../lib/api";
+import {
+  formatMoney,
+  getSeatsByRoom,
+  getSoldTickets,
+  SeatResponse,
+} from "../lib/api";
 
 function readParam(value: string | string[] | undefined, fallback: string) {
   if (Array.isArray(value)) {
@@ -19,33 +24,32 @@ function readParam(value: string | string[] | undefined, fallback: string) {
   return value ?? fallback;
 }
 
-function seatSortValue(value: string) {
-  const match = value.match(/^(\D+)(\d+)$/);
-
-  if (!match) {
-    return Number.MAX_SAFE_INTEGER;
+function rowLabelFromNumber(rowNumber: number) {
+  if (rowNumber <= 0) {
+    return String(rowNumber);
   }
 
-  return Number(match[2]);
+  const charCode = 64 + rowNumber;
+  if (charCode <= 90) {
+    return String.fromCharCode(charCode);
+  }
+
+  return String(rowNumber);
 }
 
 function groupSeatsByRow(seats: SeatResponse[]) {
   return Array.from(
     seats.reduce((groups, seat) => {
-      const existing = groups.get(seat.rowLabel) ?? [];
+      const rowLabel = rowLabelFromNumber(seat.rowNumber);
+      const existing = groups.get(rowLabel) ?? [];
       existing.push(seat);
-      groups.set(seat.rowLabel, existing);
+      groups.set(rowLabel, existing);
       return groups;
     }, new Map<string, SeatResponse[]>()),
   )
     .map(([rowLabel, rowSeats]) => ({
       rowLabel,
-      seats: rowSeats.sort((left, right) => {
-        const leftSeat = seatSortValue(left.seatNumber);
-        const rightSeat = seatSortValue(right.seatNumber);
-
-        return leftSeat - rightSeat;
-      }),
+      seats: rowSeats.sort((left, right) => left.seatNumber - right.seatNumber),
     }))
     .sort((left, right) => left.rowLabel.localeCompare(right.rowLabel));
 }
@@ -68,6 +72,7 @@ export default function SeatMapScreen() {
   const roomId = Number(readParam(params.roomId, "0"));
   const showtimeDate = readParam(params.showtimeDate, "2026-05-24");
   const showtimeTime = readParam(params.showtimeTime, "18:40");
+  const ticketPrice = Number(readParam(params.ticketPrice, "0"));
   const userId = readParam(params.userId, "usr_001");
 
   const [seatItems, setSeatItems] = useState<SeatResponse[]>([]);
@@ -83,18 +88,39 @@ export default function SeatMapScreen() {
       setSeatError(null);
 
       try {
-        const seatPage = await getSeats();
+        const [seatData, soldTickets] = await Promise.all([
+          getSeatsByRoom(roomId),
+          getSoldTickets(showtimeId),
+        ]);
+        console.log("Seats for room", seatData, soldTickets);
         if (!active) {
           return;
         }
 
-        const roomSeats = (seatPage.content ?? []).filter(
-          (seat) => seat.roomId === roomId,
+        const seats: SeatResponse[] = Array.isArray(seatData)
+          ? seatData
+          : (seatData.content ?? []);
+
+        const soldSeatIds = new Set(
+          (soldTickets ?? [])
+            .filter((ticket) => ticket.isSold)
+            .map((ticket) => ticket.seatId.trim()),
         );
+
+        const roomSeats = seats.filter((seat) => {
+          const seatNumberKey = String(seat.seatNumber);
+          const seatIdKey = String(seat.id);
+          return (
+            seat.roomId === roomId &&
+            !soldSeatIds.has(seatNumberKey) &&
+            !soldSeatIds.has(seatIdKey)
+          );
+        });
 
         setSeatItems(roomSeats);
         setSelectedSeatIds([]);
       } catch (error) {
+        console.error("Failed to load seats", error);
         if (!active) {
           return;
         }
@@ -115,7 +141,7 @@ export default function SeatMapScreen() {
     return () => {
       active = false;
     };
-  }, [roomId]);
+  }, [roomId, showtimeId]);
 
   const seatRows = useMemo(() => groupSeatsByRow(seatItems), [seatItems]);
 
@@ -125,7 +151,7 @@ export default function SeatMapScreen() {
   );
 
   const totalAmount = selectedSeatItems.reduce(
-    (sum, seat) => sum + seat.basePrice,
+    (sum, seat) => sum + seat.priceMultiplier * ticketPrice,
     0,
   );
 
@@ -142,8 +168,12 @@ export default function SeatMapScreen() {
   };
 
   const continueToCheckout = () => {
-    const selectedSeatLabels = selectedSeatItems.map((seat) => seat.seatNumber);
-    const selectedSeatPrices = selectedSeatItems.map((seat) => seat.basePrice);
+    const selectedSeatLabels = selectedSeatItems.map(
+      (seat) => `${rowLabelFromNumber(seat.rowNumber)}${seat.seatNumber}`,
+    );
+    const selectedSeatPrices = selectedSeatItems.map(
+      (seat) => seat.priceMultiplier * ticketPrice,
+    );
 
     router.push({
       pathname: "/checkout",
@@ -212,6 +242,7 @@ export default function SeatMapScreen() {
                   <View style={styles.rowSeatsWrap}>
                     {row.seats.map((seat) => {
                       const isSelected = selectedSeatIds.includes(seat.id);
+                      const seatLabel = `${row.rowLabel}${seat.seatNumber}`;
 
                       return (
                         <TouchableOpacity
@@ -233,7 +264,7 @@ export default function SeatMapScreen() {
                               isSelected && styles.seatTextSelected,
                             ]}
                           >
-                            {seat.seatNumber}
+                            {seatLabel}
                           </Text>
                         </TouchableOpacity>
                       );
