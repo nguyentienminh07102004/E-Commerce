@@ -9,10 +9,12 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { formatMoney, getSeats, SeatResponse } from "../lib/booking-api";
-
-const dates = ["Sun 12", "Mon 13", "Tue 14", "Wed 15", "Thu 16"];
-const times = ["10:00", "12:30", "15:20", "18:40", "20:30"];
+import {
+  CinemaResponse,
+  getCinemas,
+  getShowtimesByCinema,
+  ShowtimeResponse,
+} from "../lib/api";
 
 function readParam(value: string | string[] | undefined, fallback: string) {
   if (Array.isArray(value)) {
@@ -22,150 +24,167 @@ function readParam(value: string | string[] | undefined, fallback: string) {
   return value ?? fallback;
 }
 
-function seatSortValue(value: string) {
-  const match = value.match(/^(\D+)(\d+)$/);
-
-  if (!match) {
-    return Number.MAX_SAFE_INTEGER;
-  }
-
-  return Number(match[2]);
+function toTimeLabel(startTime: string) {
+  return startTime.length >= 16 ? startTime.slice(11, 16) : startTime;
 }
 
-function groupSeatsByRow(seats: SeatResponse[]) {
-  return Array.from(
-    seats.reduce((groups, seat) => {
-      const existing = groups.get(seat.rowLabel) ?? [];
-      existing.push(seat);
-      groups.set(seat.rowLabel, existing);
-      return groups;
-    }, new Map<string, SeatResponse[]>()),
-  )
-    .map(([rowLabel, rowSeats]) => ({
-      rowLabel,
-      seats: rowSeats.sort((left, right) => {
-        const leftSeat = seatSortValue(left.seatNumber);
-        const rightSeat = seatSortValue(right.seatNumber);
+function toDateLabel(dateString: string) {
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) {
+    return dateString;
+  }
 
-        return leftSeat - rightSeat;
-      }),
-    }))
-    .sort((left, right) => left.rowLabel.localeCompare(right.rowLabel));
+  const weekday = date.toLocaleDateString("en-US", { weekday: "short" });
+  const day = date.getDate();
+
+  return `${weekday} ${day}`;
 }
 
 export default function SelectSeatsScreen() {
   const params = useLocalSearchParams<{
     movieTitle?: string | string[];
-    cinemaName?: string | string[];
-    showtimeId?: string | string[];
-    roomId?: string | string[];
-    showtimeDate?: string | string[];
-    showtimeTime?: string | string[];
-    ticketPrice?: string | string[];
     userId?: string | string[];
   }>();
 
   const movieTitle = readParam(params.movieTitle, "Dune: Part Two");
-  const cinemaName = readParam(params.cinemaName, "Cinema 1");
-  const showtimeId = Number(readParam(params.showtimeId, "30"));
-  const roomId = Number(readParam(params.roomId, "10"));
-  const showtimeDate = readParam(params.showtimeDate, "2026-05-24");
-  const showtimeTime = readParam(params.showtimeTime, "18:40");
   const userId = readParam(params.userId, "usr_001");
 
-  const [selectedDateIndex, setSelectedDateIndex] = useState(2);
-  const [selectedTimeIndex, setSelectedTimeIndex] = useState(3);
-  const [seatItems, setSeatItems] = useState<SeatResponse[]>([]);
-  const [selectedSeatIds, setSelectedSeatIds] = useState<number[]>([]);
-  const [isLoadingSeats, setIsLoadingSeats] = useState(true);
-  const [seatError, setSeatError] = useState<string | null>(null);
+  const [cinemas, setCinemas] = useState<CinemaResponse[]>([]);
+  const [selectedCinemaId, setSelectedCinemaId] = useState<number | null>(null);
+  const [showtimes, setShowtimes] = useState<ShowtimeResponse[]>([]);
+  const [selectedDateIndex, setSelectedDateIndex] = useState(0);
+  const [isLoadingCinemas, setIsLoadingCinemas] = useState(true);
+  const [isLoadingShowtimes, setIsLoadingShowtimes] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const selectedCinema = cinemas.find(
+    (cinema) => cinema.id === selectedCinemaId,
+  );
 
   useEffect(() => {
     let active = true;
 
-    const loadSeats = async () => {
-      setIsLoadingSeats(true);
-      setSeatError(null);
+    const loadCinemas = async () => {
+      setIsLoadingCinemas(true);
+      setError(null);
 
       try {
-        const seatPage = await getSeats();
+        const cinemaList = await getCinemas();
         if (!active) {
           return;
         }
 
-        const roomSeats = (seatPage.content ?? []).filter(
-          (seat) => seat.roomId === roomId,
-        );
-
-        setSeatItems(roomSeats);
-        setSelectedSeatIds([]);
+        setCinemas(cinemaList);
+        setSelectedCinemaId(cinemaList[0]?.id ?? null);
       } catch (error) {
         if (!active) {
           return;
         }
 
-        setSeatItems([]);
-        setSeatError(
-          error instanceof Error ? error.message : "Failed to load seats",
+        setError(
+          error instanceof Error ? error.message : "Failed to load cinemas",
         );
       } finally {
         if (active) {
-          setIsLoadingSeats(false);
+          setIsLoadingCinemas(false);
         }
       }
     };
 
-    loadSeats();
+    loadCinemas();
 
     return () => {
       active = false;
     };
-  }, [roomId]);
+  }, []);
 
-  const seatRows = useMemo(() => groupSeatsByRow(seatItems), [seatItems]);
-
-  const selectedSeatItems = useMemo(
-    () => seatItems.filter((seat) => selectedSeatIds.includes(seat.id)),
-    [seatItems, selectedSeatIds],
-  );
-
-  const totalAmount = selectedSeatItems.reduce(
-    (sum, seat) => sum + seat.basePrice,
-    0,
-  );
-
-  const toggleSeat = (seatId: number) => {
-    if (isLoadingSeats) {
+  useEffect(() => {
+    if (selectedCinemaId == null) {
       return;
     }
 
-    setSelectedSeatIds((current) =>
-      current.includes(seatId)
-        ? current.filter((item) => item !== seatId)
-        : [...current, seatId],
+    let active = true;
+
+    const loadShowtimes = async () => {
+      setIsLoadingShowtimes(true);
+      setError(null);
+
+      try {
+        const showtimeList = await getShowtimesByCinema(selectedCinemaId);
+        if (!active) {
+          return;
+        }
+
+        setShowtimes(showtimeList);
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+
+        setShowtimes([]);
+        setError(
+          error instanceof Error ? error.message : "Failed to load showtimes",
+        );
+      } finally {
+        if (active) {
+          setIsLoadingShowtimes(false);
+        }
+      }
+    };
+
+    loadShowtimes();
+
+    return () => {
+      active = false;
+    };
+  }, [selectedCinemaId]);
+
+  const dateOptions = useMemo(() => {
+    const uniqueDates = Array.from(
+      new Set(
+        showtimes
+          .map((showtime) => showtime.startTime.slice(0, 10))
+          .filter(Boolean),
+      ),
     );
-  };
 
-  const continueToCheckout = () => {
-    const selectedSeatLabels = selectedSeatItems.map((seat) => seat.seatNumber);
-    const selectedSeatPrices = selectedSeatItems.map((seat) => seat.basePrice);
+    return uniqueDates.sort();
+  }, [showtimes]);
 
+  useEffect(() => {
+    if (dateOptions.length === 0) {
+      setSelectedDateIndex(0);
+      return;
+    }
+
+    if (selectedDateIndex >= dateOptions.length) {
+      setSelectedDateIndex(0);
+    }
+  }, [dateOptions, selectedDateIndex]);
+
+  const filteredShowtimes = useMemo(() => {
+    if (dateOptions.length === 0) {
+      return [];
+    }
+
+    return showtimes.filter(
+      (showtime) =>
+        showtime.startTime.slice(0, 10) === dateOptions[selectedDateIndex],
+    );
+  }, [showtimes, dateOptions, selectedDateIndex]);
+
+  const openSeatMap = (showtime: ShowtimeResponse) => {
     router.push({
-      pathname: "/checkout",
+      pathname: "/seat-map",
       params: {
         movieTitle,
-        cinemaName,
-        showtimeId: String(showtimeId),
-        roomId: String(roomId),
-        showtimeDate: dates[selectedDateIndex],
-        showtimeTime: times[selectedTimeIndex],
+        cinemaName: selectedCinema?.name ?? "",
+        showtimeId: String(showtime.id),
+        roomId: String(showtime.roomId ?? 0),
+        showtimeDate: showtime.startTime.slice(0, 10),
+        showtimeTime: toTimeLabel(showtime.startTime),
+        ticketPrice: String(showtime.basePrice),
         userId,
-        selectedSeatIds: selectedSeatIds.join(","),
-        selectedSeats: selectedSeatLabels.join(","),
-        selectedSeatPrices: selectedSeatPrices.join(","),
-        totalAmount: String(totalAmount),
-        discountAmount: "0",
-        serviceFee: "0",
       },
     });
   };
@@ -185,170 +204,129 @@ export default function SelectSeatsScreen() {
             <Ionicons name="chevron-back" size={20} color="#F8FAFC" />
           </TouchableOpacity>
           <View style={styles.headerTitleWrap}>
-            <Text style={styles.title}>Select Seats</Text>
+            <Text style={styles.title}>Select Cinema</Text>
             <Text style={styles.subtitle}>
-              {movieTitle} • {showtimeDate} • {showtimeTime}
+              {selectedCinema?.name ?? "Choose a theater"}
             </Text>
           </View>
           <TouchableOpacity style={styles.iconBtn} activeOpacity={0.85}>
-            <Ionicons name="funnel-outline" size={18} color="#F8FAFC" />
+            <Ionicons name="search" size={18} color="#F8FAFC" />
           </TouchableOpacity>
         </View>
 
-        <View style={styles.selectionCard}>
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Cinemas</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.cinemaRow}
+          >
+            {isLoadingCinemas ? (
+              <View style={styles.loaderBox}>
+                <Text style={styles.loaderText}>Loading cinemas...</Text>
+              </View>
+            ) : error ? (
+              <View style={styles.loaderBox}>
+                <Text style={styles.loaderText}>{error}</Text>
+              </View>
+            ) : (
+              cinemas.map((cinema) => (
+                <TouchableOpacity
+                  key={cinema.id}
+                  style={[
+                    styles.cinemaCard,
+                    cinema.id === selectedCinemaId && styles.cinemaCardActive,
+                  ]}
+                  activeOpacity={0.88}
+                  onPress={() => setSelectedCinemaId(cinema.id)}
+                >
+                  <Text
+                    style={[
+                      styles.cinemaName,
+                      cinema.id === selectedCinemaId && styles.cinemaNameActive,
+                    ]}
+                  >
+                    {cinema.name}
+                  </Text>
+                  <Text style={styles.cinemaLocation}>{cinema.city}</Text>
+                </TouchableOpacity>
+              ))
+            )}
+          </ScrollView>
+        </View>
+
+        <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Date</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.rowGap}
           >
-            {dates.map((date, idx) => (
-              <TouchableOpacity
-                key={date}
-                style={[
-                  styles.chip,
-                  idx === selectedDateIndex && styles.chipActive,
-                ]}
-                activeOpacity={0.88}
-                onPress={() => setSelectedDateIndex(idx)}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    idx === selectedDateIndex && styles.chipTextActive,
-                  ]}
-                >
-                  {date}
-                </Text>
+            {dateOptions.length === 0 ? (
+              <TouchableOpacity style={styles.chip} activeOpacity={0.88}>
+                <Text style={styles.chipText}>No dates</Text>
               </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          <Text style={[styles.sectionTitle, styles.timeTitle]}>Showtime</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.rowGap}
-          >
-            {times.map((time, idx) => (
-              <TouchableOpacity
-                key={time}
-                style={[
-                  styles.chip,
-                  idx === selectedTimeIndex && styles.chipActive,
-                ]}
-                activeOpacity={0.88}
-                onPress={() => setSelectedTimeIndex(idx)}
-              >
-                <Text
+            ) : (
+              dateOptions.map((date, idx) => (
+                <TouchableOpacity
+                  key={date}
                   style={[
-                    styles.chipText,
-                    idx === selectedTimeIndex && styles.chipTextActive,
+                    styles.chip,
+                    idx === selectedDateIndex && styles.chipActive,
                   ]}
+                  activeOpacity={0.88}
+                  onPress={() => setSelectedDateIndex(idx)}
                 >
-                  {time}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  <Text
+                    style={[
+                      styles.chipText,
+                      idx === selectedDateIndex && styles.chipTextActive,
+                    ]}
+                  >
+                    {toDateLabel(date)}
+                  </Text>
+                </TouchableOpacity>
+              ))
+            )}
           </ScrollView>
         </View>
 
-        <View style={styles.seatCard}>
-          <View style={styles.screenWrap}>
-            <View style={styles.screenArc} />
-            <Text style={styles.screenLabel}>SCREEN</Text>
-          </View>
-
-          {isLoadingSeats ? (
-            <View style={styles.loadingWrap}>
-              <Text style={styles.loadingText}>Loading seats...</Text>
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Showtimes</Text>
+          {isLoadingShowtimes ? (
+            <View style={styles.loaderBox}>
+              <Text style={styles.loaderText}>Loading showtimes...</Text>
             </View>
-          ) : seatError ? (
-            <View style={styles.loadingWrap}>
-              <Text style={styles.loadingText}>{seatError}</Text>
+          ) : error ? (
+            <View style={styles.loaderBox}>
+              <Text style={styles.loaderText}>{error}</Text>
             </View>
-          ) : seatRows.length > 0 ? (
-            <View style={styles.gridWrap}>
-              {seatRows.map((row) => (
-                <View key={row.rowLabel} style={styles.seatRow}>
-                  <Text style={styles.rowLabel}>{row.rowLabel}</Text>
-                  <View style={styles.rowSeatsWrap}>
-                    {row.seats.map((seat) => {
-                      const isSelected = selectedSeatIds.includes(seat.id);
-
-                      return (
-                        <TouchableOpacity
-                          key={seat.id}
-                          style={[
-                            styles.seat,
-                            seat.type === "VIP" && styles.seatVip,
-                            seat.type === "COUPLE" && styles.seatCouple,
-                            isSelected && styles.seatSelected,
-                          ]}
-                          activeOpacity={0.88}
-                          onPress={() => toggleSeat(seat.id)}
-                        >
-                          <Text
-                            style={[
-                              styles.seatText,
-                              seat.type === "VIP" && styles.seatTextVip,
-                              seat.type === "COUPLE" && styles.seatTextCouple,
-                              isSelected && styles.seatTextSelected,
-                            ]}
-                          >
-                            {seat.seatNumber}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </View>
-              ))}
+          ) : filteredShowtimes.length === 0 ? (
+            <View style={styles.loaderBox}>
+              <Text style={styles.loaderText}>No showtimes available</Text>
             </View>
           ) : (
-            <View style={styles.loadingWrap}>
-              <Text style={styles.loadingText}>
-                No seats found for this room.
-              </Text>
+            <View style={styles.showtimesGrid}>
+              {filteredShowtimes.map((showtime) => (
+                <TouchableOpacity
+                  key={showtime.id}
+                  style={styles.showtimeBox}
+                  activeOpacity={0.88}
+                  onPress={() => openSeatMap(showtime)}
+                >
+                  <Text style={styles.showtimeTime}>
+                    {toTimeLabel(showtime.startTime)}
+                  </Text>
+                  <Text style={styles.showtimeMeta}>
+                    ${showtime.basePrice.toFixed(2)}
+                  </Text>
+                  <Text style={styles.showtimeStatus}>{showtime.status}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
           )}
-
-          <View style={styles.legendRow}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, styles.legendAvailable]} />
-              <Text style={styles.legendText}>Available</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, styles.legendSelected]} />
-              <Text style={styles.legendText}>Selected</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, styles.legendVip]} />
-              <Text style={styles.legendText}>VIP</Text>
-            </View>
-          </View>
         </View>
       </ScrollView>
-
-      <View style={styles.bottomBar}>
-        <View>
-          <Text style={styles.bottomLabel}>
-            {selectedSeatIds.length} seats selected
-          </Text>
-          <Text style={styles.bottomPrice}>{formatMoney(totalAmount)}</Text>
-        </View>
-        <TouchableOpacity
-          style={[
-            styles.primaryBtn,
-            !selectedSeatIds.length && styles.primaryBtnDisabled,
-          ]}
-          activeOpacity={0.88}
-          onPress={continueToCheckout}
-          disabled={!selectedSeatIds.length}
-        >
-          <Text style={styles.primaryBtnText}>Continue</Text>
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 }
@@ -361,7 +339,7 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 18,
     paddingTop: 8,
-    paddingBottom: 120,
+    paddingBottom: 40,
     gap: 14,
   },
   headerRow: {
@@ -380,7 +358,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   headerTitleWrap: {
+    flex: 1,
     alignItems: "center",
+    marginHorizontal: 12,
   },
   title: {
     color: "#F8FAFC",
@@ -390,9 +370,10 @@ const styles = StyleSheet.create({
   subtitle: {
     color: "#94A3B8",
     fontSize: 12,
-    marginTop: 2,
+    marginTop: 4,
+    textAlign: "center",
   },
-  selectionCard: {
+  sectionCard: {
     backgroundColor: "#111827",
     borderRadius: 20,
     borderWidth: 1,
@@ -404,9 +385,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     marginBottom: 10,
-  },
-  timeTitle: {
-    marginTop: 14,
   },
   rowGap: {
     gap: 10,
@@ -428,170 +406,74 @@ const styles = StyleSheet.create({
   chipTextActive: {
     color: "#FFF7ED",
   },
-  seatCard: {
-    backgroundColor: "#111827",
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#1F2937",
-    padding: 14,
-  },
-  screenWrap: {
-    alignItems: "center",
-    marginBottom: 14,
-  },
-  screenArc: {
-    width: "88%",
-    height: 28,
-    borderTopLeftRadius: 200,
-    borderTopRightRadius: 200,
-    borderWidth: 2,
-    borderBottomWidth: 0,
-    borderColor: "#334155",
-  },
-  screenLabel: {
-    marginTop: 4,
-    fontSize: 11,
-    letterSpacing: 2,
-    color: "#64748B",
-  },
-  gridWrap: {
-    gap: 9,
-  },
-  loadingWrap: {
-    paddingVertical: 22,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loadingText: {
-    color: "#94A3B8",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  seatRow: {
-    flexDirection: "row",
-    alignItems: "center",
+  cinemaRow: {
     gap: 10,
   },
-  rowLabel: {
-    width: 16,
-    color: "#64748B",
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  rowSeatsWrap: {
-    flex: 1,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    gap: 7,
-  },
-  seat: {
-    width: 34,
-    height: 26,
-    borderRadius: 8,
-    backgroundColor: "#1E293B",
-    borderWidth: 1,
-    borderColor: "#334155",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  seatSelected: {
-    backgroundColor: "#F97316",
-    borderColor: "#FB923C",
-  },
-  seatVip: {
-    backgroundColor: "#1D4ED8",
-    borderColor: "#3B82F6",
-  },
-  seatCouple: {
-    width: 74,
-    backgroundColor: "#0F766E",
-    borderColor: "#14B8A6",
-  },
-  seatText: {
-    color: "#CBD5E1",
-    fontSize: 8,
-    fontWeight: "700",
-  },
-  seatTextSelected: {
-    color: "#FFF7ED",
-  },
-  seatTextVip: {
-    color: "#DBEAFE",
-  },
-  seatTextCouple: {
-    color: "#CCFBF1",
-  },
-  aisle: {
-    width: 12,
-  },
-  legendRow: {
-    marginTop: 14,
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  legendItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  legendDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  legendAvailable: {
-    backgroundColor: "#1E293B",
-    borderWidth: 1,
-    borderColor: "#475569",
-  },
-  legendSelected: {
-    backgroundColor: "#F97316",
-  },
-  legendVip: {
-    backgroundColor: "#3B82F6",
-  },
-  legendText: {
-    color: "#94A3B8",
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  bottomBar: {
-    position: "absolute",
-    left: 12,
-    right: 12,
-    bottom: 10,
-    backgroundColor: "#111827",
+  cinemaCard: {
+    minWidth: 120,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: "#0F172A",
     borderWidth: 1,
     borderColor: "#1F2937",
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
   },
-  bottomLabel: {
-    color: "#94A3B8",
-    fontSize: 12,
+  cinemaCardActive: {
+    borderColor: "#F97316",
+    backgroundColor: "#172554",
   },
-  bottomPrice: {
+  cinemaName: {
     color: "#F8FAFC",
-    fontSize: 24,
-    fontWeight: "800",
-  },
-  primaryBtn: {
-    backgroundColor: "#F97316",
-    borderRadius: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-  },
-  primaryBtnDisabled: {
-    opacity: 0.45,
-  },
-  primaryBtnText: {
-    color: "#FFF7ED",
     fontSize: 13,
     fontWeight: "700",
+  },
+  cinemaNameActive: {
+    color: "#FDE68A",
+  },
+  cinemaLocation: {
+    color: "#94A3B8",
+    fontSize: 11,
+    marginTop: 6,
+  },
+  loaderBox: {
+    paddingVertical: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loaderText: {
+    color: "#94A3B8",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  showtimesGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    justifyContent: "space-between",
+  },
+  showtimeBox: {
+    width: "48%",
+    minHeight: 96,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: "#0F172A",
+    borderWidth: 1,
+    borderColor: "#1F2937",
+    justifyContent: "space-between",
+  },
+  showtimeTime: {
+    color: "#F8FAFC",
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  showtimeMeta: {
+    color: "#94A3B8",
+    fontSize: 12,
+    marginTop: 8,
+  },
+  showtimeStatus: {
+    color: "#60A5FA",
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 6,
   },
 });

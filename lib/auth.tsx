@@ -1,19 +1,14 @@
 import { router } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import {
-  createContext,
-  PropsWithChildren,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
+    createContext,
+    PropsWithChildren,
+    useContext,
+    useEffect,
+    useMemo,
+    useState,
 } from "react";
-import {
-  LoginResponse,
-  loginUser,
-  RegisterRequest,
-  registerUser,
-} from "./booking-api";
+import { LoginResponse, loginUser, RegisterRequest, registerUser } from "./api";
 
 const ACCESS_TOKEN_KEY = "auth.accessToken";
 const REFRESH_TOKEN_KEY = "auth.refreshToken";

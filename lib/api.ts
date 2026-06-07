@@ -1,12 +1,18 @@
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 
+export type MetaData = {
+  totalPage?: number;
+  currentPage?: number;
+  pageSize?: number;
+};
+
 type ApiResponse<T> = {
-  success: boolean;
-  message: string;
   data: T;
-  statusCode: number;
-  metaData: unknown;
+  statusCode?: number;
+  metaData?: MetaData;
+  success?: boolean;
+  message?: string;
 };
 
 type PageResponse<T> = {
@@ -56,12 +62,28 @@ export type MovieResponse = {
 export type ShowtimeResponse = {
   id: number;
   startTime: string;
-  endTime: string;
-  movieId: number;
-  roomId: number;
+  endTime?: string;
+  movieId?: number;
+  roomId?: number;
+  cinemaId?: number;
+  movieName?: string;
+  roomName?: string;
+  cinemaName?: string;
   basePrice: number;
+  totalSeats?: number;
   availableSeats: number;
   status: "SCHEDULED" | "ONGOING" | "ENDED" | "CANCELLED";
+  createdAt?: string;
+  createdBy?: string | null;
+  updatedAt?: string | null;
+  updatedBy?: string | null;
+};
+
+export type CinemaResponse = {
+  id: number;
+  name: string;
+  address: string;
+  city: string;
   createdAt?: string;
   createdBy?: string | null;
   updatedAt?: string | null;
@@ -113,6 +135,7 @@ export type PaymentResponse = PaymentCreatePayload & {
   id: number;
   paidAt?: string;
   createdAt?: string;
+  paymentUrl: string;
 };
 
 export type LoginRequest = {
@@ -149,7 +172,7 @@ export type RegisterResponse = {
   isLock?: boolean;
 };
 
-const defaultBaseUrl = "http://192.168.0.103:8080/api";
+const defaultBaseUrl = "http://172.17.48.1:8889/api";
 
 function getExpoHost() {
   const hostUri =
@@ -183,7 +206,7 @@ function getApiHost() {
     Platform.OS === "android" &&
     (expoHost === "localhost" || expoHost === "127.0.0.1")
   ) {
-    return "10.0.2.2";
+    return "192.168.0.103";
   }
 
   return expoHost;
@@ -199,9 +222,7 @@ function resolveApiBaseUrl() {
   const apiHost = getApiHost();
 
   if (apiHost) {
-    const apiPort = process.env.EXPO_PUBLIC_API_PORT ?? "8080";
-
-    return `http://172.17.48.1:${apiPort}/api`;
+    return `http://${apiHost}:8889/api`;
   }
 
   return defaultBaseUrl;
@@ -281,12 +302,26 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   }
 }
 
-export async function getMovies() {
-  return requestJson<PageResponse<MovieResponse>>("/v1/movies");
+export async function getMovies({
+  page = 0,
+  size = 10,
+}: {
+  page?: number;
+  size?: number;
+}) {
+  return requestJson<MovieResponse[]>(`/v1/movies?page=${page}&size=${size}`);
 }
 
 export async function getShowtimes() {
-  return requestJson<PageResponse<ShowtimeResponse>>("/v1/showtimes");
+  return requestJson<ShowtimeResponse[]>("/v1/showtimes");
+}
+
+export async function getShowtimesByCinema(cinemaId: number) {
+  return requestJson<ShowtimeResponse[]>(`/v1/showtimes?cinemaId=${cinemaId}`);
+}
+
+export async function getCinemas() {
+  return requestJson<CinemaResponse[]>("/v1/cinemas");
 }
 
 export async function getSeats() {

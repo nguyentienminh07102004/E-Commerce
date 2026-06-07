@@ -2,41 +2,42 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Linking,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useAuth } from "../lib/auth";
 import {
-  createBooking,
-  createBookingDetail,
-  createPayment,
-  formatMoney,
-  seatLabelToSeatId,
-} from "../lib/booking-api";
+    createBooking,
+    createBookingDetail,
+    createPayment,
+    formatMoney,
+    seatLabelToSeatId,
+} from "../lib/api";
+import { useAuth } from "../lib/auth";
 
 const paymentMethods = [
-  {
-    id: "MOMO",
-    label: "MoMo Wallet",
-    detail: "Connected",
-    icon: "wallet-outline",
-  },
+  // {
+  //   id: "MOMO",
+  //   label: "MoMo Wallet",
+  //   detail: "Connected",
+  //   icon: "wallet-outline",
+  // },
   {
     id: "VNPAY",
     label: "VNPAY",
     detail: "Fast checkout",
     icon: "card-outline",
   },
-  {
-    id: "CASH",
-    label: "Cash",
-    detail: "Pay at counter",
-    icon: "cash-outline",
-  },
+  // {
+  //   id: "CASH",
+  //   label: "Cash",
+  //   detail: "Pay at counter",
+  //   icon: "cash-outline",
+  // },
 ] as const;
 
 function readParam(value: string | string[] | undefined, fallback: string) {
@@ -96,7 +97,7 @@ export default function CheckoutScreen() {
   const { isAuthenticated, isReady } = useAuth();
 
   const [selectedMethodId, setSelectedMethodId] =
-    useState<(typeof paymentMethods)[number]["id"]>("MOMO");
+    useState<(typeof paymentMethods)[number]["id"]>("VNPAY");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -170,22 +171,26 @@ export default function CheckoutScreen() {
         bookingId: booking.id,
       });
 
-      router.replace({
-        pathname: "/ticket",
-        params: {
-          bookingId: String(booking.id),
-          qrCode: booking.qrCode,
-          paymentId: String(payment.id),
-          paymentMethod: payment.method,
-          movieTitle,
-          cinemaName,
-          showtimeDate,
-          showtimeTime,
-          selectedSeats: selectedSeats.join(", "),
-          roomId,
-          finalAmount: String(finalAmount),
-        },
-      });
+      const paymentUrl = payment.paymentUrl;
+
+      Linking.openURL(paymentUrl);
+
+      // router.replace({
+      //   pathname: "/ticket",
+      //   params: {
+      //     bookingId: String(booking.id),
+      //     qrCode: booking.qrCode,
+      //     paymentId: String(payment.id),
+      //     paymentMethod: payment.method,
+      //     movieTitle,
+      //     cinemaName,
+      //     showtimeDate,
+      //     showtimeTime,
+      //     selectedSeats: selectedSeats.join(", "),
+      //     roomId,
+      //     finalAmount: String(finalAmount),
+      //   },
+      // });
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Payment failed",

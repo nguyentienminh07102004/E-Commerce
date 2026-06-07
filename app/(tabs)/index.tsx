@@ -15,7 +15,7 @@ import {
   getShowtimes,
   MovieResponse,
   ShowtimeResponse,
-} from "../../lib/booking-api";
+} from "../../lib/api";
 
 const genres = ["Action", "Adventure", "Sci-Fi", "Drama"];
 
@@ -59,6 +59,8 @@ function toTimeLabel(startTime: string) {
 export default function HomeScreen() {
   const [movies, setMovies] = useState<MovieResponse[]>([]);
   const [showtimes, setShowtimes] = useState<ShowtimeResponse[]>([]);
+  const [page, setPage] = useState(0);
+  const [limit, setLimit] = useState(10);
 
   useEffect(() => {
     let active = true;
@@ -66,7 +68,10 @@ export default function HomeScreen() {
     const loadData = async () => {
       try {
         const [moviePage, showtimePage] = await Promise.all([
-          getMovies(),
+          getMovies({
+            page,
+            size: limit,
+          }),
           getShowtimes(),
         ]);
 
@@ -74,9 +79,10 @@ export default function HomeScreen() {
           return;
         }
 
-        setMovies(moviePage.content ?? []);
+        setMovies(moviePage ?? []);
         setShowtimes(showtimePage.content ?? []);
-      } catch {
+      } catch (error) {
+        console.error("Error fetching data:", error);
         if (!active) {
           return;
         }
@@ -91,7 +97,7 @@ export default function HomeScreen() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [limit, page]);
 
   const movieCards =
     movies.length > 0
